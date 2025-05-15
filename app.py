@@ -58,4 +58,5 @@ def index():
 
     return render_template("index.html", prediction=prediction, ticker=ticker)
 
-
+if __name__ == "__main__":
+    app.run(debug=True)
