@@ -4,8 +4,12 @@ import pandas as pd
 import numpy as np
 import tensorflow as tf
 from sklearn.preprocessing import StandardScaler
+import os
+import joblib  # for saving the scaler
 
 app = Flask(__name__)
+MODEL_PATH = "model/macd_model.keras"
+SCALER_PATH = "model/scaler.save"
 
 # --- Helper Functions ---
 def fetch_stock_data(ticker):
@@ -19,19 +23,20 @@ def fetch_stock_data(ticker):
 
 def prepare_features(data):
     X = data[['MACD', 'Signal']].values
-    y = np.where(data['Close'].shift(-1) > data['Close'], 1, 0)[:-1]  # 1: up, 0: down
-    X = X[:-1]  # Align with y
+    y = np.where(data['Close'].shift(-1) > data['Close'], 1, 0)[:-1]
+    X = X[:-1]
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
     return X_scaled, y, scaler
 
-def build_model():
+def build_and_train_model(X, y):
     model = tf.keras.Sequential([
         tf.keras.layers.Dense(16, activation='relu', input_shape=(2,)),
         tf.keras.layers.Dense(8, activation='relu'),
         tf.keras.layers.Dense(1, activation='sigmoid')
     ])
     model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+    model.fit(X, y, epochs=10, batch_size=8, verbose=0)
     return model
 
 # --- Routes ---
@@ -46,17 +51,24 @@ def index():
             data = fetch_stock_data(ticker)
             X, y, scaler = prepare_features(data)
 
-            model = build_model()
-            model.fit(X, y, epochs=10, batch_size=8, verbose=0)
+            # Train and save model ONCE if not already saved
+            if not os.path.exists(MODEL_PATH):
+                model = build_and_train_model(X, y)
+                model.save(MODEL_PATH)
+                joblib.dump(scaler, SCALER_PATH)
+            else:
+                model = tf.keras.models.load_model(MODEL_PATH)
+                scaler = joblib.load(SCALER_PATH)
 
             latest_data = data[['MACD', 'Signal']].values[-1].reshape(1, -1)
             latest_scaled = scaler.transform(latest_data)
             prob = model.predict(latest_scaled)[0][0]
-            prediction = "UP" if prob > 0.5 else "DOWN"
+            prediction = "UP 📈" if prob > 0.5 else "DOWN 📉"
         except Exception as e:
             prediction = f"Error: {str(e)}"
 
     return render_template("index.html", prediction=prediction, ticker=ticker)
+
 
 if __name__ == "__main__":
     app.run(debug=True)
