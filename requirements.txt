@@ -1,0 +1,9 @@
+Flask==3.0.3
+tensorflow-macos==2.13.0
+tensorflow-metal==1.0.1
+pandas==2.2.2
+numpy==1.26.4
+yfinance==0.2.37
+scikit-learn==1.4.2
+joblib==1.4.2
+matplotlib==3.8.4

@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Stock Direction Predictor (MACD + TensorFlow)</title>
+</head>
+<body>
+    <h1>Stock Movement Prediction</h1>
+    <form method="post">
+        <label for="ticker">Enter Stock Ticker (e.g., AAPL):</label>
+        <input type="text" name="ticker" required>
+        <input type="submit" value="Predict">
+    </form>
+    
+    {% if prediction %}
+        <h2>Prediction for {{ ticker }}: <span style="color:green">{{ prediction }}</span></h2>
+    {% endif %}
+</body>
+</html>
+
