@@ -44,12 +44,22 @@ def build_and_train_model(X, y):
 def index():
     prediction = None
     ticker = None
+    error_message = None
 
     if request.method == 'POST':
         ticker = request.form['ticker'].upper()
         try:
             data = fetch_stock_data(ticker)
+
+            # Defensive check: make sure there's enough usable data
+            if data.empty or len(data) < 30:
+                raise ValueError("Not enough historical data to calculate MACD and Signal. Try a different ticker.")
+
             X, y, scaler = prepare_features(data)
+
+             # More checks in case prepare_features returns too little data
+            if X.shape[0] == 0 or y.shape[0] == 0:
+                raise ValueError("MACD/Signal values could not be computed. Try a different ticker.")
 
             # Train and save model ONCE if not already saved
             if not os.path.exists(MODEL_PATH):
