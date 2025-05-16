@@ -6,6 +6,8 @@ import tensorflow as tf
 from sklearn.preprocessing import StandardScaler
 import os
 import joblib  # for saving the scaler
+import time
+from requests.exceptions import HTTPError
 
 app = Flask(__name__)
 MODEL_PATH = "model/macd_model.keras"
@@ -13,13 +15,47 @@ SCALER_PATH = "model/scaler.save"
 
 # --- Helper Functions ---
 def fetch_stock_data(ticker):
-    data = yf.download(ticker, period='6mo')
-    short_ema = data['Close'].ewm(span=12, adjust=False).mean()
-    long_ema = data['Close'].ewm(span=26, adjust=False).mean()
-    data['MACD'] = short_ema - long_ema
-    data['Signal'] = data['MACD'].ewm(span=9, adjust=False).mean()
-    data.dropna(inplace=True)
-    return data
+    max_retries = 3
+    base_delay = 2  # seconds
+    
+    for attempt in range(max_retries):
+        try:
+            print(f"Attempt {attempt + 1} of {max_retries} to fetch data for {ticker}")
+            
+            # Add a small delay before each attempt
+            time.sleep(base_delay * (attempt + 1))
+            
+            # Download data directly using download method
+            data = yf.download(
+                ticker,
+                period='1y',
+                interval='1d',
+                progress=False,
+                ignore_tz=True
+            )
+            
+            if data.empty:
+                raise ValueError(f"No data received for ticker {ticker}")
+                
+            print(f"Successfully downloaded {len(data)} rows of data for {ticker}")
+            
+            # Calculate indicators
+            short_ema = data['Close'].ewm(span=12, adjust=False).mean()
+            long_ema = data['Close'].ewm(span=26, adjust=False).mean()
+            data['MACD'] = short_ema - long_ema
+            data['Signal'] = data['MACD'].ewm(span=9, adjust=False).mean()
+            data.dropna(inplace=True)
+            
+            if len(data) < 30:
+                raise ValueError(f"Not enough data points after calculating indicators. Got {len(data)} points, need at least 30.")
+            
+            return data
+            
+        except Exception as e:
+            print(f"Error on attempt {attempt + 1}: {str(e)}")
+            if attempt == max_retries - 1:
+                raise ValueError(f"Failed to download data for {ticker} after {max_retries} attempts. Please try again later.")
+            continue
 
 def prepare_features(data):
     X = data[['MACD', 'Signal']].values
@@ -50,6 +86,12 @@ def index():
         ticker = request.form['ticker'].upper()
         try:
             data = fetch_stock_data(ticker)
+            
+            # Debug information
+            print(f"Data length: {len(data)}")
+            print("First few rows of data:")
+            print(data.head())
+            print("\nData columns:", data.columns.tolist())
 
             # Defensive check: make sure there's enough usable data
             if data.empty or len(data) < 30:
